@@ -28,6 +28,17 @@ WORKDIR /app
 COPY package*.json ./
 COPY tsconfig.json ./
 
+# Install dependencies based on build mode
+RUN if [ "$BUILD_MODE" = "production" ]; then \
+        # Production: Install all deps, build, then remove dev deps \
+        npm ci && \
+        echo "Installing production dependencies..."; \
+    else \
+        # Development: Just install all dependencies \
+        npm ci && \
+        echo "Installing development dependencies..."; \
+    fi
+
 # Copy source and build (production only)
 COPY src/ ./src/
 RUN if [ "$BUILD_MODE" = "production" ]; then \
@@ -38,7 +49,7 @@ RUN if [ "$BUILD_MODE" = "production" ]; then \
     fi
 
 # Create directories for temporary compilation
-RUN mkdir -p /tmp/mcp-compilation /tmp/compilation && \
+RUN mkdir -p /tmp/mcp-compilation /tmp/compilation /app/tmp && \
     chown -R compiler:compiler /tmp/mcp-compilation /tmp/compilation /app
 
 # Switch to non-root user

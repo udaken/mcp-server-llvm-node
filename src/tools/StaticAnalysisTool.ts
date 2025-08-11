@@ -1,4 +1,3 @@
-import { DockerManager, type DockerOptions } from '../docker/DockerManager.js';
 import { InputValidator, type ValidationResult } from '../security/InputValidator.js';
 import { OutputSanitizer } from '../security/OutputSanitizer.js';
 import { logger } from '../utils/logger.js';
@@ -8,12 +7,11 @@ import type {
   AnalysisResult,
   ErrorResponse 
 } from '../types/index.js';
+import { BaseClangTool } from './BaseClangTool.js';
 
-export class StaticAnalysisTool {
-  private dockerManager: DockerManager;
-
+export class StaticAnalysisTool extends BaseClangTool {
   constructor() {
-    this.dockerManager = new DockerManager();
+    super();
   }
 
   async analyze(options: StaticAnalysisOptions): Promise<StaticAnalysisResponse | ErrorResponse> {
@@ -32,19 +30,16 @@ export class StaticAnalysisTool {
         };
       }
 
-      // Build clang-static-analyzer command
-      const analyzerCommand = this.buildAnalyzerCommand(options);
-      logger.debug('Executing static analysis', { command: analyzerCommand });
-
-      // Execute analysis in Docker container
-      const dockerOptions: DockerOptions = {
-        sourceCode: options.sourceCode,
-        command: analyzerCommand,
-        timeout: 60000, // 60 seconds for analysis
-        workingDir: '/workspace',
-      };
-
-      const result = await this.dockerManager.executeInContainer(dockerOptions);
+      // Execute analysis with automatic cleanup
+      const result = await this.executeWithCleanup(
+        options.sourceCode,
+        options.language || 'c++17',
+        async (workDir, sourceFile) => {
+          const analyzerCommand = this.buildAnalyzerCommand(options, sourceFile, workDir);
+          logger.debug('Executing static analysis', { command: analyzerCommand });
+          return await this.executeClang(analyzerCommand, 60, 'Static analysis timed out');
+        }
+      );
 
       // Parse analysis results
       const analysisResults = this.parseAnalysisResults(result.stdout, result.stderr);
@@ -108,7 +103,7 @@ export class StaticAnalysisTool {
     return { success: true };
   }
 
-  private buildAnalyzerCommand(options: StaticAnalysisOptions): string[] {
+  private buildAnalyzerCommand(options: StaticAnalysisOptions, sourceFile: string, workDir: string): string[] {
     const command = ['clang', '--analyze'];
 
     // Language standard
@@ -168,10 +163,11 @@ export class StaticAnalysisTool {
     command.push('-w');
 
     // Source file
-    command.push('main.cpp');
+    command.push(sourceFile);
 
     return command;
   }
+
 
   private parseAnalysisResults(stdout: string, stderr: string): AnalysisResult[] {
     const results: AnalysisResult[] = [];
@@ -264,19 +260,13 @@ export class StaticAnalysisTool {
   // Get available checkers
   async getAvailableCheckers(): Promise<string[]> {
     try {
-      const dockerOptions: DockerOptions = {
-        sourceCode: '// Dummy source for checker list',
-        command: ['clang', '--analyzer-list-enabled-checkers'],
-        timeout: 10000,
-      };
-
-      const result = await this.dockerManager.executeInContainer(dockerOptions);
+      const result = await this.executeClang(['clang', '--analyzer-list-enabled-checkers'], 10);
       
       if (result.success) {
         const checkers = result.stdout
           .split('\n')
-          .filter(line => line.trim().length > 0)
-          .map(line => line.trim());
+          .filter((line: string) => line.trim().length > 0)
+          .map((line: string) => line.trim());
         
         return checkers;
       }

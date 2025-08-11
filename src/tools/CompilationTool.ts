@@ -1,4 +1,3 @@
-import { DockerManager, type DockerOptions } from '../docker/DockerManager.js';
 import { InputValidator, type ValidationResult } from '../security/InputValidator.js';
 import { OutputSanitizer } from '../security/OutputSanitizer.js';
 import { logger } from '../utils/logger.js';
@@ -9,12 +8,12 @@ import type {
   CompilationDiagnostics,
   ErrorResponse 
 } from '../types/index.js';
+import { BaseClangTool } from './BaseClangTool.js';
+import * as path from 'path';
 
-export class CompilationTool {
-  private dockerManager: DockerManager;
-
+export class CompilationTool extends BaseClangTool {
   constructor() {
-    this.dockerManager = new DockerManager();
+    super();
   }
 
   async compile(options: CompilationOptions): Promise<CompilationResponse | ErrorResponse> {
@@ -33,19 +32,16 @@ export class CompilationTool {
         };
       }
 
-      // Build compiler command
-      const compilerCommand = this.buildCompilerCommand(options);
-      logger.debug('Executing compilation', { command: compilerCommand });
-
-      // Execute compilation in Docker container
-      const dockerOptions: DockerOptions = {
-        sourceCode: options.sourceCode,
-        command: compilerCommand,
-        timeout: (options.timeout || 30) * 1000, // Convert to milliseconds
-        workingDir: '/workspace',
-      };
-
-      const result = await this.dockerManager.executeInContainer(dockerOptions);
+      // Execute compilation with automatic cleanup
+      const result = await this.executeWithCleanup(
+        options.sourceCode,
+        options.language || 'c++17',
+        async (workDir, sourceFile) => {
+          const compilerCommand = this.buildCompilerCommand(options, sourceFile, workDir);
+          logger.debug('Executing compilation', { command: compilerCommand });
+          return await this.executeClang(compilerCommand, options.timeout || 30, 'Compilation timed out');
+        }
+      );
       
       // Sanitize outputs
       const sanitizedStdout = OutputSanitizer.sanitizeStdout(result.stdout);
@@ -141,7 +137,7 @@ export class CompilationTool {
     return { success: true };
   }
 
-  private buildCompilerCommand(options: CompilationOptions): string[] {
+  private buildCompilerCommand(options: CompilationOptions, sourceFile: string, workDir: string): string[] {
     const command = ['clang++'];
 
     // Language standard
@@ -200,17 +196,15 @@ export class CompilationTool {
     }
 
     // Output specification
-    if (options.compileOnly) {
-      command.push('-o', 'main.o');
-    } else {
-      command.push('-o', 'main');
-    }
+    const outputFile = path.join(workDir, options.compileOnly ? 'main.o' : 'main');
+    command.push('-o', outputFile);
 
     // Source file (always last)
-    command.push('main.cpp');
+    command.push(sourceFile);
 
     return command;
   }
+
 
   private parseDiagnostics(stderr: string): CompilationDiagnostics {
     const diagnostics: CompilationDiagnostics = {
@@ -277,16 +271,4 @@ export class CompilationTool {
     return null;
   }
 
-  private extractClangVersion(stdout: string, stderr: string): string {
-    const combinedOutput = `${stdout}\n${stderr}`;
-    
-    // Look for clang version in output
-    const versionMatch = combinedOutput.match(/clang version ([0-9]+\.[0-9]+\.[0-9]+)/);
-    if (versionMatch) {
-      return `clang version ${versionMatch[1]}`;
-    }
-
-    // Fallback to generic version
-    return 'clang (version unknown)';
-  }
 }

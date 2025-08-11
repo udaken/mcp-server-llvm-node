@@ -1,4 +1,3 @@
-import { DockerManager, type DockerOptions } from '../docker/DockerManager.js';
 import { InputValidator, type ValidationResult } from '../security/InputValidator.js';
 import { OutputSanitizer } from '../security/OutputSanitizer.js';
 import { logger } from '../utils/logger.js';
@@ -8,12 +7,11 @@ import type {
   ASTFormat,
   ErrorResponse 
 } from '../types/index.js';
+import { BaseClangTool } from './BaseClangTool.js';
 
-export class ASTTool {
-  private dockerManager: DockerManager;
-
+export class ASTTool extends BaseClangTool {
   constructor() {
-    this.dockerManager = new DockerManager();
+    super();
   }
 
   async generateAST(options: ASTOptions): Promise<ASTResponse | ErrorResponse> {
@@ -32,19 +30,16 @@ export class ASTTool {
         };
       }
 
-      // Build clang AST command
-      const astCommand = this.buildASTCommand(options);
-      logger.debug('Generating AST', { command: astCommand, format: options.format });
-
-      // Execute AST generation in Docker container
-      const dockerOptions: DockerOptions = {
-        sourceCode: options.sourceCode,
-        command: astCommand,
-        timeout: 30000, // 30 seconds for AST generation
-        workingDir: '/workspace',
-      };
-
-      const result = await this.dockerManager.executeInContainer(dockerOptions);
+      // Execute AST generation with automatic cleanup
+      const result = await this.executeWithCleanup(
+        options.sourceCode,
+        options.language || 'c++17',
+        async (workDir, sourceFile) => {
+          const astCommand = this.buildASTCommand(options, sourceFile, workDir);
+          logger.debug('Generating AST', { command: astCommand, format: options.format });
+          return await this.executeClang(astCommand, 30, 'AST generation timed out');
+        }
+      );
 
       let astOutput = '';
       if (result.success) {
@@ -112,7 +107,7 @@ export class ASTTool {
     return { success: true };
   }
 
-  private buildASTCommand(options: ASTOptions): string[] {
+  private buildASTCommand(options: ASTOptions, sourceFile: string, workDir: string): string[] {
     const command = ['clang'];
     const format = options.format || 'dump';
 
@@ -150,21 +145,16 @@ export class ASTTool {
     command.push('-w');
 
     // Source file
-    command.push('main.cpp');
+    command.push(sourceFile);
 
     return command;
   }
 
+
   // Get compiler information for AST capabilities
   async getCompilerInfo(): Promise<{ clangVersion: string; astFormats: ASTFormat[] }> {
     try {
-      const dockerOptions: DockerOptions = {
-        sourceCode: '// Dummy source for version check',
-        command: ['clang', '--version'],
-        timeout: 10000,
-      };
-
-      const result = await this.dockerManager.executeInContainer(dockerOptions);
+      const result = await this.executeClang(['clang', '--version'], 10);
       
       let clangVersion = 'unknown';
       if (result.success) {

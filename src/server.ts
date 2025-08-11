@@ -69,13 +69,13 @@ export class LLVMMCPServer {
                 type: 'string',
                 description: 'Optimization level',
                 enum: ['O0', 'O1', 'O2', 'O3', 'Os', 'Oz', 'Ofast'],
-                default: 'O0',
+                default: 'O2',
               },
               warnings: {
                 type: 'string',
                 description: 'Warning level',
                 enum: ['none', 'all', 'extra', 'pedantic', 'error'],
-                default: 'all',
+                default: 'pedantic',
               },
               defines: {
                 type: 'array',
@@ -277,8 +277,8 @@ export class LLVMMCPServer {
         .object({
           source_code: z.string(),
           language: z.string().optional().default('c++17'),
-          optimization: z.string().optional().default('O0'),
-          warnings: z.string().optional().default('all'),
+          optimization: z.string().optional().default('O2'),
+          warnings: z.string().optional().default('pedantic'),
           defines: z.array(z.string()).optional().default([]),
           includes: z.array(z.string()).optional().default([]),
           flags: z.array(z.string()).optional().default([]),

@@ -145,12 +145,17 @@ export class CompilationTool extends BaseClangTool {
       command.push(`-std=${options.language}`);
     }
 
-    // Optimization level
+    // Optimization level (default O2)
     if (options.optimization) {
       command.push(`-${options.optimization}`);
+    } else {
+      command.push('-O2');
     }
 
-    // Warning level
+    // Default architecture optimization
+    command.push('-march=native');
+
+    // Warning level (default: Wall, Wextra, pedantic)
     if (options.warnings) {
       switch (options.warnings) {
         case 'none':
@@ -169,6 +174,9 @@ export class CompilationTool extends BaseClangTool {
           command.push('-Wall', '-Wextra', '-Werror');
           break;
       }
+    } else {
+      // Default: comprehensive warnings with pedantic mode
+      command.push('-Wall', '-Wextra', '-Wpedantic');
     }
 
     // Preprocessor definitions

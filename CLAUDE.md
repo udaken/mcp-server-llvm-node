@@ -4,39 +4,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an MCP (Model Context Protocol) server that provides C/C++ code compilation, static analysis, and AST generation using LLVM/Clang toolchain. The server runs in Node.js 22 and uses Docker containers for secure, isolated compilation.
+This is an MCP (Model Context Protocol) server that provides C/C++ code compilation, static analysis, and AST generation using LLVM/Clang toolchain. **The server runs exclusively in Docker containers** with complete isolation and no host dependencies.
 
 ## Development Commands
 
+**This project runs exclusively in Docker containers - no local Node.js required.**
+
 ```bash
-# Install dependencies
-npm install
-
-# Development server with hot reload
-npm run dev
-
-# Build the project
-npm run build
-
-# Run tests
-npm test
-npm run test:watch  # Watch mode
-
-# Linting and formatting
-npm run lint
-npm run lint:fix
-npm run format
-
-# Start the MCP server
+# Start the MCP server (builds image if needed)
 npm start
 
-# Clean build artifacts
-npm run clean
+# Stop the MCP server
+npm stop
 
-# Docker operations
-chmod +x scripts/*.sh
-./scripts/build-docker.sh    # Build Docker image
-./scripts/test-docker.sh     # Test Docker environment
+# Connect to running server for testing
+npm run connect
+
+# Run comprehensive tests with MCP Inspector
+npm test
+
+# View server logs
+npm run logs
+
+# Check container status
+npm run status
+
+# Rebuild Docker image (after code changes)
+npm run rebuild
+
+# Clean up Docker resources
+npm run clean
+```
+
+### Direct Docker Commands
+```bash
+# Test basic functionality
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | docker exec -i llvm-mcp-server node dist/index.js
+
+# Manual container operations
+docker logs llvm-mcp-server
+docker exec -it llvm-mcp-server sh
 ```
 
 ## Architecture Notes
@@ -64,20 +71,23 @@ The project is structured as follows:
 
 ## Development Environment
 
-- Node.js environment with TypeScript support
-- LLVM integration requiring appropriate LLVM development libraries
-- MCP protocol compliance for tool and resource definitions
-- Potential native bindings for LLVM C++ APIs
+- **Docker**: Version 20.0.0 or higher (only requirement)
+- **No Node.js**: Not required on host machine
+- **No LLVM**: All LLVM/Clang tools are containerized
+- **MCP protocol compliance**: All operations through Docker containers
 
 ## Key Considerations
 
-- LLVM operations may require significant system resources
-- Security considerations for code analysis and compilation operations
-- Proper error handling for LLVM compilation and analysis failures
-- Memory management for large codebases and AST operations
-- stdio, sse に対応した MCP サーバーを実装してください
-- このMCPサーバーはソースコードを受け取り llvm/clang でコンパイルした結果等を返す事で、ユーザーから受け取った正確なC/C++コード片の診断を行うことができます
-- 最適化、言語バージョン、各種フラグなど多彩なコンパイルオプションを受け取ります
-- node.js 22 を使用します。
-- Docker で実行します。ベースは node:lts-alpine です
-- 各コマンドが動作するか、@modelcontextprotocol/inspector を使ってテストも行ってっください
+- All operations run in isolated Docker containers for security
+- Resource limits enforced at container level (2 CPU cores, 1GB RAM)
+- Automatic cleanup of compilation artifacts
+- Complete separation between host and compilation environment
+- stdio transport for MCP communication through Docker exec
+
+## Docker-First Architecture
+
+- **Container Base**: node:lts-alpine with LLVM/Clang 20.1.8
+- **Security**: Non-root user, read-only filesystem, resource limits
+- **Isolation**: Complete sandboxing with no network access during compilation
+- **MCP Protocol**: stdio and future SSE transport support through containers
+- **Testing**: Built-in @modelcontextprotocol/inspector integration for validation

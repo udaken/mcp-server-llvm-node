@@ -1,11 +1,19 @@
 {
   "mcpServers": {
     "llvm-mcp-server": {
-      "command": "node",
-      "args": ["D:/Documents/Repos/mcp-server-llvm-node/dist/index.js"],
+      "command": "docker",
+      "args": [
+        "compose",
+        "-f", "docker-compose.yml",
+        "run",
+        "--rm",
+        "--service-ports",
+        "--name", "llvm-mcp-server",
+        "llvm-mcp-server"
+      ],
       "env": {
         "NODE_ENV": "production"
-      }
+        }
     }
   }
 }

@@ -1,28 +1,30 @@
 #!/bin/bash
 
-# Stop LLVM MCP Server Docker Container
+# Stop LLVM MCP Server using Docker Compose
 
 set -e
 
 echo "🛑 Stopping LLVM MCP Server..."
 
-# Check if container exists and is running
+# Stop all services using Docker Compose
+echo "Stopping Docker Compose services..."
+docker compose down
+
+# Check for any remaining containers
 if docker ps -q -f name=llvm-mcp-server | grep -q .; then
-    echo "Stopping container..."
-    docker stop llvm-mcp-server
-    
-    echo "Removing container..."
-    docker rm llvm-mcp-server
-    
-    echo "✅ MCP Server stopped and removed successfully"
-elif docker ps -a -q -f name=llvm-mcp-server | grep -q .; then
-    echo "Container exists but is not running. Removing..."
-    docker rm llvm-mcp-server
-    echo "✅ MCP Server container removed"
-else
-    echo "⚠️  No MCP server container found"
+    echo "⚠️  Some containers are still running. Force stopping..."
+    docker stop llvm-mcp-server 2>/dev/null || true
+    docker rm llvm-mcp-server 2>/dev/null || true
 fi
 
+# Clean up any inspector containers
+docker stop mcp-inspector 2>/dev/null || true
+docker rm mcp-inspector 2>/dev/null || true
+docker stop mcp-inspector-standalone 2>/dev/null || true
+docker rm mcp-inspector-standalone 2>/dev/null || true
+
+echo "✅ MCP Server stopped and cleaned up successfully"
+
 echo ""
-echo "📋 Container status:"
-docker ps -a -f name=llvm-mcp-server --format "table {{.Names}}\t{{.Status}}" || echo "No containers found"
+echo "📋 Remaining containers:"
+docker ps -a -f name=llvm-mcp-server -f name=mcp-inspector --format "table {{.Names}}\t{{.Status}}" || echo "No MCP-related containers found"

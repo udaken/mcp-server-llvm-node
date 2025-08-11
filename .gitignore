@@ -1,12 +1,12 @@
 .claude/
 
-# Node.js
+# Node.js (only used inside Docker containers)
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Build output
+# Build output (generated inside containers)
 dist/
 build/
 

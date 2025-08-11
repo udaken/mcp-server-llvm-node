@@ -1,48 +1,45 @@
 #!/bin/bash
 
-# Start LLVM MCP Server in Docker Container
+# Start LLVM MCP Server using Docker Compose
 # This script allows running the MCP server without Node.js installed on the host
 
 set -e
 
-echo "🐳 Starting LLVM MCP Server in Docker..."
-
-# Build the MCP server image
-echo "Building MCP server image..."
-docker build -f Dockerfile.mcp-server -t llvm-mcp-server:latest .
+echo "🐳 Starting LLVM MCP Server with Docker Compose..."
 
 # Check if container is already running
 if docker ps -q -f name=llvm-mcp-server | grep -q .; then
     echo "⚠️  Container llvm-mcp-server is already running"
-    echo "Stopping existing container..."
-    docker stop llvm-mcp-server
-    docker rm llvm-mcp-server
+    echo "Stopping existing services..."
+    docker compose down
 fi
 
-# Start the MCP server container
-echo "Starting MCP server container..."
-docker run -d \
-    --name llvm-mcp-server \
-    --restart unless-stopped \
-    --security-opt no-new-privileges:true \
-    --cap-drop ALL \
-    --cap-add DAC_OVERRIDE \
-    --read-only \
-    --tmpfs /tmp/mcp-compilation:noexec,nosuid,size=500m \
-    --tmpfs /tmp:noexec,nosuid,size=100m \
-    --cpus="2.0" \
-    --memory="1g" \
-    -i \
-    llvm-mcp-server:latest
+# Start the MCP server with Docker Compose
+echo "Building and starting MCP server..."
+docker compose up -d mcp-server
 
 echo "✅ MCP Server started successfully!"
 echo ""
 echo "Container Information:"
-docker ps -f name=llvm-mcp-server --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+docker compose ps
 
 echo ""
 echo "📋 Usage:"
 echo "  Connect via stdin/stdout: docker exec -i llvm-mcp-server node dist/index.js"
-echo "  View logs: docker logs -f llvm-mcp-server"
-echo "  Stop server: docker stop llvm-mcp-server"
+echo "  View logs: docker compose logs -f mcp-server"
+echo "  Stop server: docker compose down"
 echo "  Test with Inspector: ./scripts/test-mcp-docker.sh"
+
+# Wait for container to be healthy
+echo "Waiting for server to be ready..."
+timeout=30
+while [ $timeout -gt 0 ] && ! docker exec llvm-mcp-server node dist/index.js --help 2>/dev/null; do
+    sleep 1
+    timeout=$((timeout - 1))
+done
+
+if [ $timeout -eq 0 ]; then
+    echo "⚠️  Server may not be fully ready yet. Check logs with: docker compose logs mcp-server"
+else
+    echo "🎉 Server is ready to accept connections!"
+fi

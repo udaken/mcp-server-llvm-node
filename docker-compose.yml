@@ -1,9 +1,63 @@
 version: '3.8'
 
 services:
-  llvm-mcp-server:
-    build: .
+  # Main MCP Server (Production)
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_MODE: production
     container_name: llvm-mcp-server
+    restart: unless-stopped
+    
+    # Stdin/stdout for MCP communication
+    stdin_open: true
+    tty: true
+    
+    # Environment variables
+    environment:
+      - NODE_ENV=production
+      - MCP_SERVER_MODE=stdio
+    
+    # Security settings
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE  # For file operations
+    read_only: true
+    
+    # Tmpfs for temporary compilation files
+    tmpfs:
+      - /tmp/mcp-compilation:noexec,nosuid,size=500m
+      - /tmp:noexec,nosuid,size=100m
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Networks
+    networks:
+      - mcp-network
+
+  # MCP Server Development Version (with volume mounts)
+  mcp-server-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_MODE: development
+    container_name: llvm-mcp-server-dev
+    profiles:
+      - dev
     volumes:
       - .:/app
       - compilation-cache:/tmp/compilation
@@ -11,30 +65,80 @@ services:
     environment:
       - NODE_ENV=development
     ports:
-      - "3000:3000"  # For SSE transport
+      - "3000:3000"  # For future SSE transport
     networks:
       - mcp-network
     restart: unless-stopped
 
-  # Compilation worker container (for isolated compilation)
+  # Compilation Worker (for isolated operations)
   compilation-worker:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_MODE: production
     container_name: compilation-worker
+    profiles:
+      - worker
     volumes:
       - compilation-cache:/tmp/compilation
     working_dir: /workspace
     user: compiler
     networks:
       - mcp-network
-    profiles:
-      - worker  # Only start when explicitly requested
+      
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - DAC_OVERRIDE  # For file operations
     read_only: true
     tmpfs:
       - /tmp:noexec,nosuid,size=100m
+
+  # MCP Inspector (for testing)
+  mcp-inspector:
+    image: node:lts-alpine
+    container_name: mcp-inspector
+    profiles:
+      - inspector
+    ports:
+      - "6274:6274"
+      - "6277:6277"
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      sh -c "
+        npm install -g @modelcontextprotocol/inspector &&
+        npx @modelcontextprotocol/inspector docker exec -i llvm-mcp-server node dist/index.js
+      "
+    depends_on:
+      - mcp-server
+    networks:
+      - mcp-network
+
+  # Standalone Inspector (runs without dependency)
+  inspector-standalone:
+    image: node:lts-alpine
+    container_name: mcp-inspector-standalone
+    profiles:
+      - inspector-standalone
+    ports:
+      - "6274:6274"
+      - "6277:6277"
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      sh -c "
+        npm install -g @modelcontextprotocol/inspector &&
+        echo 'MCP Inspector ready. Connect manually to your MCP server.' &&
+        sleep infinity
+      "
+    networks:
+      - mcp-network
 
 volumes:
   compilation-cache:

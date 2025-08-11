@@ -9,8 +9,16 @@ echo "🧪 Testing MCP Server in Docker with Inspector..."
 # Check if MCP server container is running
 if ! docker ps -q -f name=llvm-mcp-server | grep -q .; then
     echo "❌ MCP server container is not running"
-    echo "Please start it first: ./scripts/start-mcp-server.sh"
-    exit 1
+    echo "Starting MCP server with Docker Compose..."
+    docker compose up -d mcp-server
+    
+    echo "Waiting for server to be ready..."
+    sleep 5
+    
+    if ! docker ps -q -f name=llvm-mcp-server | grep -q .; then
+        echo "❌ Failed to start MCP server"
+        exit 1
+    fi
 fi
 
 echo "✅ MCP server container is running"

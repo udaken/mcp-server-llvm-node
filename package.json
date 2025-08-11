@@ -5,15 +5,14 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix",
-    "format": "prettier --write src/**/*.ts",
-    "clean": "rimraf dist"
+    "start": "./scripts/start-mcp-server.sh",
+    "stop": "./scripts/stop-mcp-server.sh",
+    "connect": "./scripts/connect-mcp-server.sh",
+    "test": "./scripts/test-mcp-docker.sh",
+    "logs": "docker logs -f llvm-mcp-server",
+    "status": "docker ps -f name=llvm-mcp-server",
+    "rebuild": "docker build -f Dockerfile.mcp-server -t llvm-mcp-server:latest .",
+    "clean": "docker image prune -f && docker container prune -f"
   },
   "keywords": [
     "mcp",
@@ -26,7 +25,7 @@
   "author": "",
   "license": "MIT",
   "engines": {
-    "node": ">=22.0.0"
+    "docker": ">=20.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.2",

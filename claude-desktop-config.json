@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "llvm-mcp-server": {
+      "command": "node",
+      "args": ["D:/Documents/Repos/mcp-server-llvm-node/dist/index.js"],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}

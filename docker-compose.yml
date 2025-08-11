@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  llvm-mcp-server:
+    build: .
+    container_name: llvm-mcp-server
+    volumes:
+      - .:/app
+      - compilation-cache:/tmp/compilation
+    working_dir: /app
+    environment:
+      - NODE_ENV=development
+    ports:
+      - "3000:3000"  # For SSE transport
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Compilation worker container (for isolated compilation)
+  compilation-worker:
+    build: .
+    container_name: compilation-worker
+    volumes:
+      - compilation-cache:/tmp/compilation
+    working_dir: /workspace
+    user: compiler
+    networks:
+      - mcp-network
+    profiles:
+      - worker  # Only start when explicitly requested
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+
+volumes:
+  compilation-cache:
+    driver: local
+
+networks:
+  mcp-network:
+    driver: bridge

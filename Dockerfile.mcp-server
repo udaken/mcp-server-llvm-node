@@ -1,0 +1,58 @@
+# MCP Server Production Dockerfile
+FROM node:lts-alpine
+
+# Install LLVM/Clang and build tools
+RUN apk add --no-cache \
+    clang \
+    clang-dev \
+    clang-extra-tools \
+    llvm \
+    llvm-dev \
+    build-base \
+    musl-dev \
+    linux-headers \
+    && rm -rf /var/cache/apk/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Install ALL dependencies (including dev dependencies for build)
+RUN npm ci
+
+# Copy source code and build
+COPY src/ ./src/
+RUN npm run build
+
+# Remove development dependencies and source code after build
+RUN rm -rf src/ node_modules/ \
+    && npm ci --omit=dev \
+    && npm cache clean --force
+
+# Create non-root user for running the MCP server
+RUN addgroup -g 1001 -S compiler && \
+    adduser -S compiler -u 1001 -G compiler -s /bin/sh
+
+# Create directories for temporary compilation
+RUN mkdir -p /tmp/mcp-compilation && \
+    chown -R compiler:compiler /tmp/mcp-compilation /app
+
+# Switch to non-root user
+USER compiler
+
+# Expose the MCP server (stdio mode doesn't need ports, but for potential future SSE)
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD echo '{"jsonrpc":"2.0","id":1,"method":"ping"}' | node dist/index.js --health-check || exit 1
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV MCP_SERVER_MODE=stdio
+
+# Start the MCP server
+CMD ["node", "dist/index.js"]

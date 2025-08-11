@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp-server
+    container_name: llvm-mcp-server
+    restart: unless-stopped
+    
+    # Stdin/stdout for MCP communication
+    stdin_open: true
+    tty: true
+    
+    # Environment variables
+    environment:
+      - NODE_ENV=production
+      - MCP_SERVER_MODE=stdio
+    
+    # Security settings
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE  # For file operations
+    read_only: true
+    
+    # Tmpfs for temporary compilation files
+    tmpfs:
+      - /tmp/mcp-compilation:noexec,nosuid,size=500m
+      - /tmp:noexec,nosuid,size=100m
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Networks
+    networks:
+      - mcp-network
+
+  # MCP Inspector service (for testing)
+  mcp-inspector:
+    image: node:lts-alpine
+    container_name: mcp-inspector
+    ports:
+      - "6274:6274"
+      - "6277:6277"
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: >
+      sh -c "
+        npm install -g @modelcontextprotocol/inspector &&
+        npx @modelcontextprotocol/inspector docker exec -i llvm-mcp-server node dist/index.js
+      "
+    depends_on:
+      - mcp-server
+    networks:
+      - mcp-network
+    profiles:
+      - inspector
+
+networks:
+  mcp-network:
+    driver: bridge

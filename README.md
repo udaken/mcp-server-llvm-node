@@ -13,52 +13,91 @@ An MCP (Model Context Protocol) server that provides C/C++ code compilation and 
 
 ## Prerequisites
 
-- **Docker**: Version 20.0.0 or higher
-- **No Node.js required on host machine**
+- **Docker**: Version 20.0.0 or higher with Docker Compose support
+- **No Node.js, LLVM, or other dependencies required on host machine**
+- **Operating System**: Linux, macOS, or Windows with Docker Desktop
 
 ## Quick Start
 
+### Method 1: Using Docker Compose (Recommended)
+
 ```bash
 # Start the MCP server
-npm start
+docker compose up -d mcp-server
 
-# Test the server
-npm test
-
-# Connect interactively
-npm run connect
+# Test basic functionality
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | docker exec -i llvm-mcp-server node dist/index.js
 
 # View logs
-npm run logs
+docker compose logs -f mcp-server
 
 # Stop the server
-npm stop
+docker compose down
 ```
+
+### Method 2: Using Shell Scripts (Convenience Wrappers)
+
+For convenience, shell scripts are provided as Docker command wrappers:
+
+```bash
+# Start the MCP server (runs Docker Compose internally)
+./scripts/start-mcp-server.sh
+
+# Test the server
+./scripts/test-mcp-docker.sh
+
+# Connect interactively
+./scripts/connect-mcp-server.sh
+
+# View logs and status
+docker compose logs -f mcp-server
+docker compose ps
+
+# Stop the server
+./scripts/stop-mcp-server.sh
+```
+
+> **Note**: Shell scripts are convenience wrappers that execute Docker/Docker Compose commands. No Node.js installation is required on the host.
 
 ## Available Commands
 
+### Docker Compose Commands (Primary Method)
+
 | Command | Description |
 |---------|-------------|
-| `npm start` | Build and start the MCP server in Docker |
-| `npm stop` | Stop and remove the MCP server container |
-| `npm run connect` | Connect to running server for interactive testing |
-| `npm test` | Run comprehensive tests with MCP Inspector |
-| `npm run logs` | View server logs in real-time |
-| `npm run status` | Check container status |
-| `npm run rebuild` | Rebuild Docker image |
-| `npm run clean` | Clean up unused Docker images and containers |
+| `docker compose up -d mcp-server` | Build and start the MCP server |
+| `docker compose down` | Stop and remove all containers |
+| `docker compose logs -f mcp-server` | View server logs in real-time |
+| `docker compose ps` | Check container status |
+| `docker compose build --no-cache mcp-server` | Rebuild Docker image |
+| `docker compose --profile inspector up -d` | Start with MCP Inspector |
+| `docker compose --profile dev up -d` | Start development environment |
 
-### Alternative Script Usage
+### Shell Script Wrappers
 
-You can also use the shell scripts directly for more control:
+Convenience scripts that execute Docker commands:
 
-| Script | Description |
-|--------|-------------|
-| `./scripts/start-mcp-server.sh` | Build and start the MCP server container |
-| `./scripts/stop-mcp-server.sh` | Stop and remove the MCP server container |
-| `./scripts/connect-mcp-server.sh` | Connect to running server for interactive testing |
-| `./scripts/test-mcp-docker.sh` | Run comprehensive tests with MCP Inspector |
-| `./scripts/docker-compose-commands.sh` | Comprehensive Docker Compose helper with all operations |
+| Script | Description | Underlying Docker Command |
+|--------|-------------|---------------------------|
+| `./scripts/start-mcp-server.sh` | Start MCP server | `docker compose up -d mcp-server` |
+| `./scripts/stop-mcp-server.sh` | Stop server | `docker compose down` |
+| `./scripts/connect-mcp-server.sh` | Connect interactively | Direct Docker exec commands |
+| `./scripts/test-mcp-docker.sh` | Run comprehensive tests | MCP Inspector with Docker wrapper |
+| `./scripts/docker-compose-commands.sh` | All operations helper | Various Docker Compose commands |
+
+### Docker Compose Helper
+
+The `./scripts/docker-compose-commands.sh` script provides comprehensive Docker operations:
+
+```bash
+# Usage examples
+./scripts/docker-compose-commands.sh start      # Start MCP server
+./scripts/docker-compose-commands.sh stop       # Stop all services  
+./scripts/docker-compose-commands.sh inspector  # Start with Inspector
+./scripts/docker-compose-commands.sh dev        # Start development environment
+./scripts/docker-compose-commands.sh logs       # Show logs
+./scripts/docker-compose-commands.sh clean      # Clean up resources
+```
 
 ## Tools
 
@@ -133,8 +172,33 @@ For convenience, you can also use the provided scripts:
 ## MCP Client Configuration
 
 ### Claude Desktop
-Add to your `~/.claude_desktop_config.json`:
 
+#### Step 1: Choose Configuration Method
+
+**For Option 1 (docker exec)**: Start the MCP server first:
+```bash
+# Start the MCP server in Docker
+docker compose up -d mcp-server
+
+# Verify it's running
+docker compose ps
+```
+
+**For Option 2 (docker compose run)**: No pre-startup required - containers will be created automatically when Claude Desktop connects.
+
+**For Option 3 (shell script)**: Create a wrapper script (see Advanced Configuration Options below).
+
+#### Step 2: Configure Claude Desktop
+Add the following configuration to your Claude Desktop config file:
+
+**Location of config file:**
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
+- **Linux**: `~/.config/claude/claude_desktop_config.json`
+
+**Configuration for stdio mode:**
+
+**Option 1: Using docker exec (requires running container):**
 ```json
 {
   "mcpServers": {
@@ -147,22 +211,154 @@ Add to your `~/.claude_desktop_config.json`:
 }
 ```
 
+**Option 2: Using docker compose run (recommended):**
+```json
+{
+  "mcpServers": {
+    "llvm-mcp-server": {
+      "command": "docker",
+      "args": ["compose", "run", "--rm", "-i", "mcp-server", "node", "dist/index.js"],
+      "env": {},
+      "cwd": "/path/to/mcp-server-llvm-node"
+    }
+  }
+}
+```
+
+Replace `/path/to/mcp-server-llvm-node` with the absolute path to your project directory.
+
+**Option 3: Using shell script wrapper:**
+```json
+{
+  "mcpServers": {
+    "llvm-mcp-server": {
+      "command": "/path/to/mcp-server-llvm-node/scripts/claude-mcp-wrapper.sh",
+      "args": [],
+      "env": {}
+    }
+  }
+}
+```
+
+#### Step 3: Restart Claude Desktop
+After saving the configuration file, restart Claude Desktop to apply the changes.
+
+#### Step 4: Verify Connection
+Once restarted, Claude Desktop should automatically connect to your MCP server. You can verify this by:
+1. Opening a new conversation in Claude Desktop
+2. Looking for the MCP server indicator in the Claude Desktop interface
+3. The MCP tools should be available: `compile_cpp`, `analyze_cpp`, `get_ast`
+4. Resources should be available: `llvm://standards`, `llvm://compiler-info`, `llvm://checkers`
+
+If the connection fails, check:
+- The MCP server container is running: `docker compose ps`
+- Container logs: `docker compose logs mcp-server`
+- Claude Desktop logs for connection errors
+
+#### Troubleshooting Claude Desktop Connection
+
+**Common Issues:**
+
+1. **Container not running**
+   ```bash
+   # Check if container is running
+   docker compose ps
+   
+   # Start if not running
+   docker compose up -d mcp-server
+   ```
+
+2. **Permission issues on Windows**
+   - Ensure Docker Desktop is running
+   - Try running Claude Desktop as Administrator
+
+3. **Path issues**
+   - Use absolute paths if relative paths don't work
+   - On Windows, use forward slashes in JSON: `"C:/path/to/project"`
+
+4. **Connection timeout**
+   ```bash
+   # Test manual connection
+   echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | docker exec -i llvm-mcp-server node dist/index.js
+   ```
+
+#### Configuration Method Comparison
+
+| Method | Pros | Cons | Best For |
+|--------|------|------|----------|
+| **docker exec** | Fast, uses existing container | Requires pre-started container | Development with long-running server |
+| **docker compose run** | Auto-starts, isolated sessions | Slower startup, creates new containers | Production, reliable connections |
+| **shell script** | Most flexible, custom logic | Additional maintenance | Complex setups, custom environments |
+
+#### Advanced Configuration Options
+
+**Create a wrapper script for Option 3** (`scripts/claude-mcp-wrapper.sh`):
+```bash
+#!/bin/bash
+
+# Navigate to project directory
+cd "$(dirname "$0")/.."
+
+# Option A: Use docker compose run (recommended)
+exec docker compose run --rm -i mcp-server node dist/index.js
+
+# Option B: Use docker exec (uncomment to use this instead)
+# exec docker exec -i llvm-mcp-server node dist/index.js
+
+# Option C: Ensure container is running, then exec
+# docker compose up -d mcp-server >/dev/null 2>&1
+# exec docker exec -i llvm-mcp-server node dist/index.js
+```
+
+Make the script executable:
+```bash
+chmod +x scripts/claude-mcp-wrapper.sh
+```
+
+#### Windows-Specific Configuration
+
+For Windows users, you may need to create a `.bat` file instead:
+
+**Create `scripts/claude-mcp-wrapper.bat`:**
+```batch
+@echo off
+cd /d "%~dp0\.."
+docker compose run --rm -i mcp-server node dist/index.js
+```
+
+**Windows Claude Desktop configuration:**
+```json
+{
+  "mcpServers": {
+    "llvm-mcp-server": {
+      "command": "C:/path/to/mcp-server-llvm-node/scripts/claude-mcp-wrapper.bat",
+      "args": [],
+      "env": {}
+    }
+  }
+}
+```
+
 ### Using with MCP Inspector
 The server includes built-in support for MCP Inspector testing:
 ```bash
-npm test
+./scripts/test-mcp-docker.sh
 ```
 
 This will automatically:
 1. Start the MCP server container if not running
 2. Run comprehensive functionality tests
-3. Launch MCP Inspector for interactive testing
+3. Launch containerized MCP Inspector for interactive testing (preferred)
+4. Fallback to host-based Inspector if containerized version fails
 
 #### Manual Inspector Setup
-If you need to set up MCP Inspector manually:
+If you need to set up MCP Inspector manually (requires Node.js only for Inspector UI):
 
 ```bash
-# Create wrapper script
+# Start MCP Inspector profile (includes Inspector container)
+docker compose --profile inspector up -d
+
+# Or create wrapper script for external Inspector
 cat > /tmp/mcp-docker-wrapper.sh << 'EOF'
 #!/bin/bash
 docker exec -i llvm-mcp-server node dist/index.js
@@ -170,7 +366,7 @@ EOF
 
 chmod +x /tmp/mcp-docker-wrapper.sh
 
-# Start Inspector
+# Start Inspector (requires Node.js on host for Inspector UI only)
 npx @modelcontextprotocol/inspector /tmp/mcp-docker-wrapper.sh
 ```
 
@@ -190,23 +386,30 @@ All compilation and analysis occurs in isolated Docker containers with:
 - Input sanitization and output filtering
 - Process execution timeout protection
 
-## Docker-Only Architecture
+## Docker-First Architecture
 
-This project has been specifically designed to run **exclusively in Docker containers**, eliminating all host dependencies.
+This project is designed to run **exclusively in Docker containers**, eliminating all host dependencies through a comprehensive Docker-first approach.
 
-### Migration from Local Dependencies
+### Complete Containerization
 
-**Before (Local Dependencies):**
-- Required Node.js 22+ on host machine
-- Required LLVM/Clang installation on host
-- Local npm dependencies and build process
-- Direct `node` command execution
+**Host Machine Requirements:**
+- Docker with Docker Compose support only
+- No Node.js, LLVM, Clang, or other development tools needed
 
-**After (Docker-Only):**
-- **Only Docker required** on host machine
-- All dependencies containerized
-- All operations through `npm` scripts that manage Docker
-- Complete isolation and security
+**Container-Based Execution:**
+- All compilation and analysis occurs in isolated containers
+- TypeScript build process runs inside containers
+- MCP server communication through Docker exec
+- Multi-profile Docker Compose configuration for different use cases
+
+### Docker Compose Profiles
+
+The project uses Docker Compose profiles for different deployment scenarios:
+
+- **Production** (`mcp-server`): Hardened container with minimal privileges
+- **Development** (`dev`): Volume mounts for live code editing
+- **Inspector** (`inspector`): MCP Inspector for interactive testing
+- **Worker** (`worker`): Dedicated compilation worker containers
 
 ### Benefits of Docker-Only Approach
 
@@ -226,25 +429,44 @@ This project has been specifically designed to run **exclusively in Docker conta
 - **Resources**: CPU and memory limits enforced at container level
 - **Build Modes**: Unified Dockerfile supports both development and production builds
 
-### File Structure for Docker-Only Approach
+### Docker-First File Structure
 
-- **Excluded**: `dist/`, `node_modules/` from repository (generated in containers)
-- **Docker-focused**: All documentation emphasizes containerized usage
-- **Automated Scripts**: Docker management through npm scripts
-- **Unified Configuration**: Single docker-compose.yml with profiles
+```
+├── docker-compose.yml          # Unified Docker Compose configuration
+├── Dockerfile                  # Multi-stage build (dev/production)
+├── scripts/
+│   ├── docker-compose-commands.sh  # Docker Compose helper
+│   ├── start-mcp-server.sh     # Server startup
+│   ├── stop-mcp-server.sh      # Server shutdown
+│   ├── test-mcp-docker.sh      # Testing suite
+│   └── connect-mcp-server.sh   # Interactive connection
+├── src/                        # TypeScript source (built in container)
+├── package.json                # npm scripts as Docker wrappers
+└── README.md                   # Docker-focused documentation
+```
+
+**Generated in Containers Only:**
+- `dist/` - TypeScript compilation output
+- `node_modules/` - npm dependencies
+- Temporary compilation artifacts
 
 ## Troubleshooting
 
 ### Container Issues
 ```bash
 # Check container status
-npm run status
+docker compose ps
 
 # View detailed logs
-npm run logs
+docker compose logs -f mcp-server
 
 # Restart if needed
-npm stop && npm start
+docker compose restart mcp-server
+
+# Alternative using scripts
+./scripts/docker-compose-commands.sh status
+./scripts/docker-compose-commands.sh logs
+./scripts/docker-compose-commands.sh restart
 ```
 
 ### Connection Problems
@@ -253,7 +475,7 @@ npm stop && npm start
 docker exec llvm-mcp-server echo "Container is running"
 
 # Test MCP server directly
-npm run connect
+./scripts/connect-mcp-server.sh
 
 # Alternative direct testing
 docker exec -it llvm-mcp-server sh
@@ -262,33 +484,56 @@ node dist/index.js --version
 
 ### Container Not Starting
 ```bash
-# Check if ports are in use
-docker ps -a
-npm stop
-npm start
+# Check container status and logs
+docker compose ps
+docker compose logs mcp-server
 
-# Check Docker logs
-docker logs llvm-mcp-server
+# Clean restart
+docker compose down
+docker compose up -d mcp-server
+
+# Alternative with scripts
+./scripts/stop-mcp-server.sh
+./scripts/start-mcp-server.sh
+
+# Check for port conflicts
+docker ps -a
 ```
 
 ### Verification After Setup
 After starting the server, verify everything works correctly:
 
+#### Method 1: Docker Compose
 ```bash
 # 1. Start the server
-npm start
+docker compose up -d mcp-server
 
 # 2. Test basic functionality
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | docker exec -i llvm-mcp-server node dist/index.js
 
 # 3. Run comprehensive tests
-npm test
+./scripts/test-mcp-docker.sh
 
 # 4. Stop when done
-npm stop
+docker compose down
 ```
 
-This ensures the LLVM MCP Server runs reliably in any environment with Docker, providing consistent behavior and enhanced security through complete containerization.
+#### Method 2: Shell Scripts
+```bash
+# 1. Start the server
+./scripts/start-mcp-server.sh
+
+# 2. Test basic functionality
+./scripts/test-mcp-docker.sh
+
+# 3. Connect interactively
+./scripts/connect-mcp-server.sh
+
+# 4. Stop when done
+./scripts/stop-mcp-server.sh
+```
+
+This Docker-first approach ensures the LLVM MCP Server runs reliably in any environment, providing consistent behavior and enhanced security through complete containerization.
 
 ## License
 

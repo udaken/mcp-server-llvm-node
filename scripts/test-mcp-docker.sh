@@ -81,24 +81,41 @@ echo ""
 echo "🚀 Starting MCP Inspector to test interactively..."
 echo "Note: Inspector will connect to the containerized MCP server"
 
-# Check if Inspector is available
-if ! command -v npx >/dev/null 2>&1; then
-    echo "❌ npx not found. Please install Node.js to run MCP Inspector"
-    echo "Alternatively, you can test manually with:"
-    echo "echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' | docker exec -i llvm-mcp-server node dist/index.js"
-    exit 0
-fi
+# Try to use containerized Inspector first
+echo "Attempting to start containerized Inspector..."
+if docker compose --profile inspector up -d; then
+    echo "✅ Containerized Inspector started"
+    echo "Access Inspector at: http://localhost:6274 or http://localhost:6277"
+    echo "Inspector container will automatically connect to MCP server"
+    echo ""
+    echo "To stop Inspector: docker compose --profile inspector down"
+else
+    echo "❌ Failed to start containerized Inspector"
+    echo ""
+    
+    # Fallback to host-based Inspector if available
+    if ! command -v npx >/dev/null 2>&1; then
+        echo "❌ npx not found. Cannot run host-based Inspector"
+        echo "Alternatives:"
+        echo "1. Test manually with:"
+        echo "   echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}' | docker exec -i llvm-mcp-server node dist/index.js"
+        echo "2. Use ./scripts/connect-mcp-server.sh for interactive testing"
+        exit 0
+    fi
 
-# Create a wrapper script for Inspector to connect to Docker
-cat > /tmp/mcp-docker-wrapper.sh << 'EOF'
+    echo "Falling back to host-based Inspector (requires Node.js)..."
+    
+    # Create a wrapper script for Inspector to connect to Docker
+    cat > /tmp/mcp-docker-wrapper.sh << 'EOF'
 #!/bin/bash
 docker exec -i llvm-mcp-server node dist/index.js
 EOF
 
-chmod +x /tmp/mcp-docker-wrapper.sh
+    chmod +x /tmp/mcp-docker-wrapper.sh
 
-echo "Starting Inspector..."
-npx @modelcontextprotocol/inspector /tmp/mcp-docker-wrapper.sh
+    echo "Starting host-based Inspector..."
+    npx @modelcontextprotocol/inspector /tmp/mcp-docker-wrapper.sh
 
-# Cleanup
-rm -f /tmp/mcp-docker-wrapper.sh
+    # Cleanup
+    rm -f /tmp/mcp-docker-wrapper.sh
+fi

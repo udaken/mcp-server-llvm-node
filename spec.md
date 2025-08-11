@@ -157,9 +157,9 @@ Lists available static analysis checkers.
 {
   "success": false,
   "error": {
-    "code": string,
-    "message": string,
-    "details": object
+    "code": "string",
+    "message": "string",
+    "details": "object"
   }
 }
 ```

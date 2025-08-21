@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "MCP server providing LLVM/Clang compilation and analysis tools - Docker-only execution",
   "type": "module",
-  "private": true,
+  "bin": {
+    "mcp-server-llvm": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
